@@ -57,26 +57,18 @@ import 'events/events.dart' show XHRGetters;
 /// * [Using XMLHttpRequest](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest_API/Using_XMLHttpRequest)
 @Deprecated('Instead use package:http.')
 class HttpRequest {
-  // The lint is ignored because these are purposely made to match the old
-  // names used in `dart:html`
-  // ignore:constant_identifier_names
-  static const int DONE = 4;
-  // ignore:constant_identifier_names
-  static const int HEADERS_RECEIVED = 2;
-  // ignore:constant_identifier_names
-  static const int LOADING = 3;
-  // ignore:constant_identifier_names
-  static const int OPENED = 1;
-  // ignore:constant_identifier_names
+  // Constants are kept to match the old names used in `dart:html`
   static const int UNSENT = 0;
+  static const int OPENED = 1;
+  static const int HEADERS_RECEIVED = 2;
+  static const int LOADING = 3;
+  static const int DONE = 4;
 
   /// Creates a GET request for the specified [url].
   ///
-  /// This is similar to [request] but specialized for HTTP GET requests which
-  /// return text content.
+  /// Similar to [request], but specialized for HTTP GET requests which return text content.
   ///
-  /// To add query parameters, append them to the [url] following a `?`, joining
-  /// each key to its value with `=` and separating key-value pairs with `&`.
+  /// Example of adding query parameters:
   ///
   ///     var name = Uri.encodeQueryComponent('John');
   ///     var id = Uri.encodeQueryComponent('42');
@@ -86,10 +78,18 @@ class HttpRequest {
   ///     });
   ///
   /// See also [request].
-  static Future<String> getString(String url,
-          {bool? withCredentials, void Function(ProgressEvent)? onProgress}) =>
-      request(url, withCredentials: withCredentials, onProgress: onProgress)
-          .then((r) => r.responseText);
+  static Future<String> getString(
+    String url, {
+    bool? withCredentials,
+    void Function(ProgressEvent)? onProgress,
+  }) async {
+    final response = await request(
+      url,
+      withCredentials: withCredentials,
+      onProgress: onProgress,
+    );
+    return response.responseText;
+  }
 
   /// Makes a server POST request with the specified data encoded as form data.
   ///
@@ -97,149 +97,81 @@ class HttpRequest {
   /// to sending a [FormData] object with broader browser support but limited to
   /// String values.
   ///
-  /// If [data] is supplied, the key/value pairs are URI encoded with
-  /// [Uri.encodeQueryComponent] and converted into an HTTP query string.
+  /// Example usage:
   ///
-  /// Unless otherwise specified, this method appends the following header:
-  ///
-  ///     Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-  ///
-  /// Here's an example of using this method:
-  ///
-  ///     var data = { 'firstName' : 'John', 'lastName' : 'Doe' };
+  ///     var data = {'firstName': 'John', 'lastName': 'Doe'};
   ///     HttpRequest.postFormData('/send', data).then((HttpRequest resp) {
   ///       // Do something with the response.
   ///     });
   ///
   /// See also [request].
   static Future<XMLHttpRequest> postFormData(
-      String url, Map<String, String> data,
-      {bool? withCredentials,
-      String? responseType,
-      Map<String, String>? requestHeaders,
-      void Function(ProgressEvent)? onProgress}) {
-    final parts = <String>[];
-    data.forEach((key, value) {
-      parts.add('${Uri.encodeQueryComponent(key)}='
-          '${Uri.encodeQueryComponent(value)}');
-    });
-    final formData = parts.join('&');
-    requestHeaders ??= <String, String>{};
-    requestHeaders.putIfAbsent('Content-Type',
-        () => 'application/x-www-form-urlencoded; charset=UTF-8');
+    String url,
+    Map<String, String> data, {
+    bool? withCredentials,
+    String? responseType,
+    Map<String, String>? requestHeaders,
+    void Function(ProgressEvent)? onProgress,
+  }) {
+    final formData = data.entries
+        .map((entry) =>
+            '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .join('&');
 
-    return request(url,
-        method: 'POST',
-        withCredentials: withCredentials,
-        responseType: responseType,
-        requestHeaders: requestHeaders,
-        sendData: formData,
-        onProgress: onProgress);
+    requestHeaders ??= {};
+    requestHeaders.putIfAbsent(
+      'Content-Type',
+      () => 'application/x-www-form-urlencoded; charset=UTF-8',
+    );
+
+    return request(
+      url,
+      method: 'POST',
+      withCredentials: withCredentials,
+      responseType: responseType,
+      requestHeaders: requestHeaders,
+      sendData: formData,
+      onProgress: onProgress,
+    );
   }
 
   /// Creates and sends a URL request for the specified [url].
   ///
-  /// By default `request` will perform an HTTP GET request, but a different
-  /// method (`POST`, `PUT`, `DELETE`, etc) can be used by specifying the
-  /// [method] parameter. (See also [HttpRequest.postFormData] for `POST`
-  /// requests only.
+  /// Supports various HTTP methods (`GET`, `POST`, etc.), optional headers, and data.
   ///
-  /// The Future is completed when the response is available.
-  ///
-  /// If specified, `sendData` will send data in the form of a [ByteBuffer],
-  /// [Blob], [Document], [String], or [FormData] along with the HttpRequest.
-  ///
-  /// If specified, [responseType] sets the desired response format for the
-  /// request. By default it is [String], but can also be 'arraybuffer', 'blob',
-  /// 'document', 'json', or 'text'.
-  /// for more information.
-  ///
-  /// The [withCredentials] parameter specified that credentials such as a
-  /// cookie (already) set in the header or
-  /// [authorization headers](http://tools.ietf.org/html/rfc1945#section-10.2)
-  /// should be specified for the request. Details to keep in mind when using
-  /// credentials:
-  ///
-  /// * Using credentials is only useful for cross-origin requests.
-  /// * The `Access-Control-Allow-Origin` header of `url` cannot contain a
-  ///   wildcard (*).
-  /// * The `Access-Control-Allow-Credentials` header of `url` must be set to
-  ///   true.
-  /// * If `Access-Control-Expose-Headers` has not been set to true, only a
-  ///   subset of all the response headers will be returned when calling
-  ///   `getAllResponseHeaders`.
-  ///
-  /// The following is equivalent to the [getString] sample above:
-  ///
-  ///     var name = Uri.encodeQueryComponent('John');
-  ///     var id = Uri.encodeQueryComponent('42');
-  ///     HttpRequest.request('users.json?name=$name&id=$id')
-  ///       .then((HttpRequest resp) {
-  ///         // Do something with the response.
-  ///     });
-  ///
-  /// Here's an example of submitting an entire form with [FormData].
+  /// Example usage:
   ///
   ///     var myForm = querySelector('form#myForm');
-  ///     var data = new FormData(myForm);
+  ///     var data = FormData(myForm);
   ///     HttpRequest.request('/submit', method: 'POST', sendData: data)
   ///       .then((HttpRequest resp) {
   ///         // Do something with the response.
   ///     });
-  ///
-  /// Note that requests for file:// URIs are only supported by Chrome
-  /// extensions with appropriate permissions in their manifest. Requests to
-  /// file:// URIs will also never fail- the Future will always complete
-  /// successfully, even when the file cannot be found.
-  ///
-  /// See also: [authorization headers][1].
-  ///
-  /// [1]: http://en.wikipedia.org/wiki/Basic_access_authentication
-  static Future<XMLHttpRequest> request(String url,
-      {String? method,
-      bool? withCredentials,
-      String? responseType,
-      String? mimeType,
-      Map<String, String>? requestHeaders,
-      Object? sendData,
-      void Function(ProgressEvent)? onProgress}) {
+  static Future<XMLHttpRequest> request(
+    String url, {
+    String? method,
+    bool? withCredentials,
+    String? responseType,
+    String? mimeType,
+    Map<String, String>? requestHeaders,
+    Object? sendData,
+    void Function(ProgressEvent)? onProgress,
+  }) {
     final completer = Completer<XMLHttpRequest>();
     final xhr = XMLHttpRequest();
-    method ??= 'GET';
-    xhr.open(method, url, true);
 
-    if (withCredentials != null) {
-      xhr.withCredentials = withCredentials;
-    }
+    xhr.open(method ?? 'GET', url, true);
 
-    if (responseType != null) {
-      xhr.responseType = responseType;
-    }
+    if (withCredentials != null) xhr.withCredentials = withCredentials;
+    if (responseType != null) xhr.responseType = responseType;
+    if (mimeType != null) xhr.overrideMimeType(mimeType);
 
-    if (mimeType != null) {
-      xhr.overrideMimeType(mimeType);
-    }
-
-    // ignore: unnecessary_lambdas
-    requestHeaders?.forEach((a, b) => xhr.setRequestHeader(a, b));
-
-    if (onProgress != null) {
-      xhr.onProgress.listen(onProgress);
-    }
+    requestHeaders?.forEach(xhr.setRequestHeader);
+    if (onProgress != null) xhr.onProgress.listen(onProgress);
 
     xhr.onLoad.listen((ProgressEvent e) {
       final status = xhr.status;
-      final accepted = status >= 200 && status < 300;
-      final fileUri = status == 0; // file:// URIs have status of 0.
-      final notModified = status == 304;
-      // Redirect status is specified up to 307, but others have been used in
-      // practice. Notably Google Drive uses 308 Resume Incomplete for
-      // resumable uploads, and it's also been used as a redirect. The
-      // redirect case will be handled by the browser before it gets to us,
-      // so if we see it we should pass it through to the user.
-      final unknownRedirect = status > 307 && status < 400;
-
-      if (accepted || fileUri || notModified || unknownRedirect) {
+      if ((status >= 200 && status < 300) || status == 0 || status == 304) {
         completer.complete(xhr);
       } else {
         completer.completeError(e);
@@ -248,11 +180,7 @@ class HttpRequest {
 
     xhr.onError.listen(completer.completeError);
 
-    if (sendData != null) {
-      xhr.send(sendData is String ? sendData.toJS : sendData.jsify());
-    } else {
-      xhr.send();
-    }
+    xhr.send(sendData is String ? sendData.toJS : sendData?.jsify());
 
     return completer.future;
   }
